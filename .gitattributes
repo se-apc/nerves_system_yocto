@@ -1,0 +1,3 @@
+*.sh	eol=lf
+*.ex  eol=lf
+*.exs  eol=lf
