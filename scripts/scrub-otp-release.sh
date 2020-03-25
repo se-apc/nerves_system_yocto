@@ -123,6 +123,6 @@ for EXECUTABLE in $EXECUTABLES; do
 
         # Strip debug information from ELF binaries
         # Symbols are still available to the user in the release directory.
-        $STRIP "$EXECUTABLE"
+        $STRIP "$EXECUTABLE" || echo "Executable $EXECUTABLE not stripped. Probably stripped already..."
     fi
 done
