@@ -175,7 +175,13 @@ defmodule Nerves.System.Yocto do
 
     # Delete toolchain
     bash("rm -Rf #{package_dir}/toolchain", cd: pkg.path)
-    bash("rm #{package_dir}/images", cd: pkg.path)
+    bash("[ -d #{package_dir}/images ] && rm -rfv #{package_dir}/images", cd: pkg.path)
+
+    # Create directory
+    bash(
+      "mkdir -p #{package_dir}/poky.sh",
+      cd: pkg.path
+    )
 
     # Copy SDK
     bash(
