@@ -179,7 +179,7 @@ defmodule Nerves.System.Yocto do
 
     # Create directory
     bash(
-      "mkdir -p #{package_dir}/poky.sh",
+      "mkdir -p #{package_dir}",
       cd: pkg.path
     )
 
