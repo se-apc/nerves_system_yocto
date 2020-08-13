@@ -177,7 +177,7 @@ System.put_env("REBAR_PLT_DIR", rebar_plt_dir)
 # System.put_env("LDFLAGS", "--sysroot=#{sdk_sysroot} -fno-use-linker-plugin")
 System.put_env("STRIP", "#{crosscompile}-strip")
 System.put_env("ERL_CFLAGS", "-I#{erts_dir}/include -I#{erl_interface_dir}/include")
-System.put_env("ERL_LDFLAGS", "-L#{erts_dir}/lib -L#{erl_interface_dir}/lib -lerts -lerl_interface -lei")
+System.put_env("ERL_LDFLAGS", "-L#{erts_dir}/lib -L#{erl_interface_dir}/lib -lerts -lei")
 System.put_env("REBAR_TARGET_ARCH", Path.basename(crosscompile))
 
 # Rebar naming
