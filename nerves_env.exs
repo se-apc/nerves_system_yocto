@@ -88,6 +88,8 @@ end
 system_path = System.get_env("NERVES_SYSTEM") ||
   Mix.raise "You must set NERVES_SYSTEM to the system dir prior to requiring this file"
 
+Mix.shell().info("Looking for the poky.sh in #{system_path}")
+
 Nerves.System.Yocto.ensure_unpacked(system_path)
 Utils.source_shell_env("#{system_path}/toolchain/environment-setup-nerves.sh")
 

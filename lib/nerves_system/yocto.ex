@@ -5,10 +5,17 @@ defmodule Nerves.System.Yocto do
 
   import Mix.Nerves.Utils
 
+  defp poky_script(pkg) do
+    sdk_image = pkg.config[:platform_config][:sdk_image] || pkg.config[:platform_config][:image]
+    build_dir = pkg.config[:platform_config][:build_dir]
+
+    "./#{build_dir}/tmp/deploy/sdk/poky-*-#{sdk_image}-*.sh"
+  end
+
   @doc """
   Called as the last step of bootstrapping the Nerves env.
   """
-  def bootstrap(pkg = %{path: path}) do
+  def bootstrap(_pkg = %{path: path}) do
     path
     |> Path.join("nerves_env.exs")
     |> Code.require_file()
@@ -23,6 +30,8 @@ defmodule Nerves.System.Yocto do
       bash("mv toolchain/staging staging", cd: path)
 
       File.rm(sdk_sh)
+    else
+       IO.puts("sdk_sh = #{inspect sdk_sh} does not exist! We shall attempt at the later stage...")
     end
   end
 
@@ -30,6 +39,8 @@ defmodule Nerves.System.Yocto do
   Build the artifact
   """
   def build(pkg, toolchain, opts) do
+    Mix.shell().info("Build...")
+
     {_, type} = :os.type()
     make(type, pkg, toolchain, opts)
   end
@@ -67,18 +78,43 @@ defmodule Nerves.System.Yocto do
     make_archive(type, pkg, toolchain, opts)
   end
 
+  defp prepare(pkg) do
+    Mix.shell().info("Preparing SDK image...")
+
+    system_path = System.get_env("NERVES_SYSTEM") || raise("You must set NERVES_SYSTEM to the system dir prior to requiring this file")
+
+    sdk_sh = Path.join(system_path, "poky.sh")
+
+    unless File.exists?(sdk_sh) do
+      [poky_install_script | _tail] =
+	poky_script(pkg)
+	|> Path.wildcard()
+
+      File.cp!(poky_install_script, sdk_sh)
+
+      ensure_unpacked(system_path)
+    end
+
+    :ok
+  end
+
   defp make(:linux, pkg, _toolchain, _opts) do
     setup = pkg.config[:platform_config][:setup]
     build_dir = pkg.config[:platform_config][:build_dir]
     image = pkg.config[:platform_config][:image]
     machine = pkg.config[:platform_config][:machine]
     sdk_image = pkg.config[:platform_config][:sdk_image] || pkg.config[:platform_config][:image]
+    package_dir = package_dir(pkg)
 
+    Mix.shell().info("Make...")
+    Mix.shell().info("    package_dir = #{package_dir}")
+    Mix.shell().info("    build_dir   = #{build_dir}")
+
+   #  File.cp
     if setup do
       bash(setup, cd: pkg.path)
     end
 
-    package_dir = package_dir(pkg)
     File.rm_rf(package_dir)
 
     nerves_system_yocto_path =
@@ -111,7 +147,7 @@ defmodule Nerves.System.Yocto do
 
       # Layer the config/scripts directories
       for source <- [nerves_system_yocto_path, pkg.path],
-          conf_dir <- ~w(config, scripts),
+          conf_dir <- ~w(config scripts),
           File.exists?(Path.join(source, conf_dir)) do
         bash(
           "cp -r #{nerves_system_yocto_path}/#{conf_dir}/* #{package_dir}/#{conf_dir}/",
@@ -184,8 +220,10 @@ defmodule Nerves.System.Yocto do
     )
 
     # Copy SDK
+    Mix.shell().info("Copying SDK to #{package_dir}/poky.sh")
+
     bash(
-      "cp ./#{build_dir}/tmp/deploy/sdk/poky-*-#{sdk_image}-*.sh #{package_dir}/poky.sh",
+      "cp -fv ./#{build_dir}/tmp/deploy/sdk/poky-*-#{sdk_image}-*.sh #{package_dir}/poky.sh",
       cd: pkg.path
     )
 
