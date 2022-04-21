@@ -98,7 +98,7 @@ defmodule Nerves.System.Yocto do
     :ok
   end
 
-  defp make(:linux, pkg, _toolchain, _opts) do
+  defp make(:linux, pkg, _toolchain, opts) do
     setup = pkg.config[:platform_config][:setup]
     build_dir = pkg.config[:platform_config][:build_dir]
     image = pkg.config[:platform_config][:image]
@@ -203,6 +203,17 @@ defmodule Nerves.System.Yocto do
     :ok
   end
 
+  # Translates the given list of sclusions into the parameters' string that can be passed to tar ‘--exclude=pattern’
+  defp exclude_tar_params(nil) do
+    ""
+  end
+  defp exclude_tar_params(list) do
+    for elem <- list do
+	"--exclude=\'#{elem}\'"
+    end
+    |> Enum.join(" ")
+  end
+
   defp make_archive(:linux, pkg, _toolchain, _opts) do
     package_dir = package_dir(pkg)
     machine = pkg.config[:platform_config][:machine]
@@ -236,8 +247,12 @@ defmodule Nerves.System.Yocto do
 
     package_path = Path.join(Mix.Project.build_path(), name <> Artifact.ext(pkg))
 
+    an =  Artifact.name(pkg)
+    exclusion_list = pkg.config[:platform_config][:exclude]
+    exclude_params = exclude_tar_params(exclusion_list)
+
     bash(
-      "tar c -z -f #{package_path} -C #{Mix.Project.build_path()} #{Artifact.name(pkg)}",
+      "tar c -z -f #{package_path} -C #{Mix.Project.build_path()} #{exclude_params} #{Artifact.name(pkg)}",
       cd: pkg.path
     )
 
