@@ -214,11 +214,15 @@ defmodule Nerves.System.Yocto do
     |> Enum.join(" ")
   end
 
-  defp make_archive(:linux, pkg, _toolchain, _opts) do
+  defp make_archive(:linux, pkg, toolchain, opts) do
     package_dir = package_dir(pkg)
     machine = pkg.config[:platform_config][:machine]
     build_dir = pkg.config[:platform_config][:build_dir]
     sdk_image = pkg.config[:platform_config][:sdk_image] || pkg.config[:platform_config][:image]
+
+    # Work-around the need of changing VERSION in order to have the nerves_system_yocto built
+    # In the worst case we shall invoke make function twice and that has negligible overhead.
+    make(:linux, pkg, toolchain, opts)
 
     # Delete toolchain
     bash("rm -Rf #{package_dir}/toolchain", cd: pkg.path)
