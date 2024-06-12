@@ -9,6 +9,7 @@ defmodule NervesSystemYocto.Mixfile do
     [app: :nerves_system_yocto,
      version:  @version,
      elixir: "~> 1.3",
+     deps: deps(),
      description: description(),
      nerves_package: nerves_package(),
      compilers: Mix.compilers ]
@@ -25,6 +26,12 @@ defmodule NervesSystemYocto.Mixfile do
     """
     Nerves System - Yocto
     """
+  end
+
+  defp deps do
+    [
+      {:nerves, github: "se-apc/nerves", runtime: false, override: true}
+    ]
   end
 
   def nerves_package do
