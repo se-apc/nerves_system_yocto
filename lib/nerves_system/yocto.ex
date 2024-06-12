@@ -24,7 +24,9 @@ defmodule Nerves.System.Yocto do
 
       File.rm(sdk_sh)
     else
-       IO.puts("sdk_sh = #{inspect sdk_sh} does not exist! We shall attempt at the later stage...")
+      IO.puts(
+        "sdk_sh = #{inspect(sdk_sh)} does not exist! We shall attempt at the later stage..."
+      )
     end
   end
 
@@ -83,7 +85,6 @@ defmodule Nerves.System.Yocto do
     Mix.shell().info("    package_dir = #{package_dir}")
     Mix.shell().info("    deploy_dir   = #{deploy_dir}")
 
-   #  File.cp
     if setup do
       bash(setup, cd: pkg.path)
     end
@@ -182,9 +183,10 @@ defmodule Nerves.System.Yocto do
   defp exclude_tar_params(nil) do
     ""
   end
+
   defp exclude_tar_params(list) do
     for elem <- list do
-	"--exclude=\'#{elem}\'"
+      "--exclude=\'#{elem}\'"
     end
     |> Enum.join(" ")
   end
@@ -207,7 +209,7 @@ defmodule Nerves.System.Yocto do
 
     # Work-around the need of changing VERSION in order to have the nerves_system_yocto built
     # In the worst case we shall invoke make function twice and that has negligible overhead.
-    #make(:linux, pkg, toolchain, opts)
+    make(:linux, pkg, toolchain, opts)
 
     # Delete toolchain
     File.rm_rf!("#{pkg.path}/#{package_dir}/toolchain")
@@ -221,7 +223,7 @@ defmodule Nerves.System.Yocto do
 
     File.cp!(sdk_file(pkg), "#{pkg.path}/#{package_dir}/poky.sh")
 
-    #bash("cp -Rf #{build_dir}/tmp/deploy/images/#{machine} #{package_dir}/images", cd: pkg.path)
+    bash("cp -Rf #{build_dir}/tmp/deploy/images/#{machine} #{package_dir}/images", cd: pkg.path)
 
     name = Artifact.download_name(pkg)
 

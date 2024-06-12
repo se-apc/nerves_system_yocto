@@ -2,17 +2,19 @@ defmodule NervesSystemYocto.Mixfile do
   use Mix.Project
 
   @version Path.join(__DIR__, "VERSION")
-    |> File.read!
-    |> String.trim
+           |> File.read!()
+           |> String.trim()
 
   def project do
-    [app: :nerves_system_yocto,
-     version:  @version,
-     elixir: "~> 1.3",
-     deps: deps(),
-     description: description(),
-     nerves_package: nerves_package(),
-     compilers: Mix.compilers ]
+    [
+      app: :nerves_system_yocto,
+      version: @version,
+      elixir: "~> 1.3",
+      deps: deps(),
+      description: description(),
+      nerves_package: nerves_package(),
+      compilers: Mix.compilers()
+    ]
   end
 
   # Configuration for the OTP application
@@ -40,5 +42,4 @@ defmodule NervesSystemYocto.Mixfile do
       version: @version
     ]
   end
-
 end

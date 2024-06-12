@@ -8,9 +8,10 @@ defmodule System.Env do
   # end
 
   def path_add(p) do
-    case :os.type do
+    case :os.type() do
       {:win32, _} ->
         System.put_env(@path, "#{path()};#{p}")
+
       _ ->
         System.put_env(@path, "#{path()}:#{p}")
     end
@@ -21,13 +22,13 @@ defmodule System.Env do
   # end
 
   def ld_library_path_add(p) do
-    case :os.type do
+    case :os.type() do
       {:win32, _} ->
         System.put_env(@ld_library_path, "#{ld_library_path()};#{p}")
+
       _ ->
         System.put_env(@ld_library_path, "#{ld_library_path()}:#{p}")
     end
-
   end
 
   def path do
@@ -58,35 +59,35 @@ defmodule Utils do
   def source_shell_env(shell_env) do
     System.cmd("/bin/bash", ["-c", "source #{shell_env}; env -0"])
     |> elem(0)
-    |> String.replace("\n","")
+    |> String.replace("\n", "")
     |> String.split("\0")
     |> Enum.map(fn line ->
-        case String.split(line,"=", parts: 2) do
-          [var_name, value] ->
+      case String.split(line, "=", parts: 2) do
+        [var_name, value] ->
+          old_val = System.get_env(var_name)
 
-            old_val = System.get_env(var_name)
-            if old_val != value do
-              var_name
-              |> String.trim()
-              |> System.put_env(value)
-            else
-              :same
-            end
+          if old_val != value do
+            var_name
+            |> String.trim()
+            |> System.put_env(value)
+          else
+            :same
+          end
 
-          [""] ->
-            :single
+        [""] ->
+          :single
 
-          [single] ->
-            IO.puts "ignoring '#{single}'"
-            :single
-        end
-      end)
+        [single] ->
+          IO.puts("ignoring '#{single}'")
+          :single
+      end
+    end)
   end
 end
 
-
-system_path = System.get_env("NERVES_SYSTEM") ||
-  Mix.raise "You must set NERVES_SYSTEM to the system dir prior to requiring this file"
+system_path =
+  System.get_env("NERVES_SYSTEM") ||
+    Mix.raise("You must set NERVES_SYSTEM to the system dir prior to requiring this file")
 
 Mix.shell().info("Looking for the poky.sh in #{system_path}")
 
@@ -112,35 +113,35 @@ sdk_sysroot =
 toolchain_path = System.get_env("NERVES_TOOLCHAIN")
 
 crosscompile = System.get_env("CROSSCOMPILE")
+
 # arch_flags = "-march=armv7-a -marm  -mthumb-interwork -mfloat-abi=hard -mtune=cortex-a7 --sysroot=#{sdk_sysroot}"
 
 # TODO:  Bundle these files with sysroots
 # System.Env.path_add("/c/dev/bin")
 
 Path.join([toolchain_path, "usr/bin", crosscompile])
-|> System.Env.path_add
+|> System.Env.path_add()
 
 Path.join(toolchain_path, "usr/bin/squashfs-tools")
-|> System.Env.path_add
+|> System.Env.path_add()
 
 Path.join(toolchain_path, "usr/bin")
-|> System.Env.path_add
+|> System.Env.path_add()
 
 Path.join(toolchain_path, "usr/sbin")
-|> System.Env.path_add
+|> System.Env.path_add()
 
 Path.join(toolchain_path, "bin")
-|> System.Env.path_add
+|> System.Env.path_add()
 
 Path.join(toolchain_path, "usr/lib")
-|> System.Env.ld_library_path_add
+|> System.Env.ld_library_path_add()
 
-Path.join([toolchain_path, "usr/lib",crosscompile])
-|> System.Env.ld_library_path_add
-
+Path.join([toolchain_path, "usr/lib", crosscompile])
+|> System.Env.ld_library_path_add()
 
 if crosscompile == "" do
- Mix.raise "Cannot find a cross compiler"
+  Mix.raise("Cannot find a cross compiler")
 end
 
 System.put_env("NERVES_SDK_IMAGES", Path.join(system_path, "images"))
@@ -156,20 +157,18 @@ System.put_env("NERVES_SDK_SYSROOT", sdk_sysroot)
 
 erts_dir =
   Path.join(sdk_sysroot, "usr/lib/erlang/erts-*")
-  |> Path.wildcard
-  |> List.first
+  |> Path.wildcard()
+  |> List.first()
 
 System.put_env("ERTS_DIR", erts_dir)
 
 erl_interface_dir =
   Path.join(sdk_sysroot, "usr/lib/erlang/usr")
-  |> Path.wildcard
-  |> List.first
-
+  |> Path.wildcard()
+  |> List.first()
 
 System.put_env("ERL_INTERFACE_DIR", erl_interface_dir)
-rebar_plt_dir =
-  Path.join(sdk_sysroot, "/usr/lib/erlang")
+rebar_plt_dir = Path.join(sdk_sysroot, "/usr/lib/erlang")
 System.put_env("REBAR_PLT_DIR", rebar_plt_dir)
 
 # System.put_env("CC", "#{crosscompile}-gcc")
@@ -187,18 +186,19 @@ System.put_env("ERL_EI_LIBDIR", Path.join(erl_interface_dir, "lib"))
 System.put_env("ERL_EI_INCLUDE_DIR", Path.join(erl_interface_dir, "include"))
 
 host_erl_major_ver = :erlang.system_info(:otp_release) |> to_string
+
 [target_erl_major_version | _] =
   sdk_sysroot
   |> Path.join("/usr/lib/erlang/releases/*/OTP_VERSION")
-  |> Path.wildcard
-  |> List.first
-  |> File.read!
-  |> String.trim
+  |> Path.wildcard()
+  |> List.first()
+  |> File.read!()
+  |> String.trim()
   |> String.split(".")
 
 # Check to see if the system major version of ERL and the target major version match
 if host_erl_major_ver != target_erl_major_version do
-  Mix.raise """
+  Mix.raise("""
   Major version mismatch between host and target Erlang/OTP versions
     Host version: #{host_erl_major_ver}
     Target version: #{target_erl_major_version}
@@ -206,5 +206,5 @@ if host_erl_major_ver != target_erl_major_version do
   This will likely cause Erlang code compiled for the target to fail in
   unexpected ways. Install an Erlang OTP release that matches the target
   version before continuing.
-  """
+  """)
 end
