@@ -147,7 +147,6 @@ defmodule Nerves.System.Yocto do
   # KAS_BUILD_DIR=build-nmc4/ kas build kas/meta-nmc4/nmc4-dev.yml -c populate_sdk --target agilis-core-image-dev
   def bitbake(pkg, command) do
     build_dir = pkg.config[:platform_config][:build_dir]
-    poky_dir = pkg.config[:platform_config][:poky_dir]
     yml_file = pkg.config[:platform_config][:yml_file]
 
     full_cmd = "kas build #{yml_file} #{command}"
@@ -156,26 +155,24 @@ defmodule Nerves.System.Yocto do
   end
 
   def ensure_image(pkg) do
-    build_dir = pkg.config[:platform_config][:build_dir]
-    image = pkg.config[:platform_config][:image]
-    machine = pkg.config[:platform_config][:machine]
-
-    squashfs_file = "#{build_dir}/tmp/deploy/images/#{machine}/#{image}-#{machine}.squashfs"
+    squashfs_file = squashfs_file(pkg)
+    image_build_cmd = pkg.config[:platform_config][:image_build_cmd]
 
     unless File.exists?(squashfs_file) do
       Mix.shell().info("#{squashfs_file} does not exist, rebuilding...")
-      bitbake(pkg, "#{image}")
+      bitbake(pkg, "#{image_build_cmd}")
     end
 
     :ok
   end
 
   def ensure_sdk(pkg) do
-    build_dir = pkg.config[:platform_config][:build_dir]
-    sdk_image = pkg.config[:platform_config][:sdk_image]
+    sdk_file = sdk_file(pkg)
+    sdk_build_cmd = pkg.config[:platform_config][:sdk_image]
 
-    unless Path.wildcard("#{build_dir}/tmp/deploy/sdk/poky-*-#{sdk_image}-*.sh") do
-      bitbake(pkg, "-c populate_sdk #{sdk_image}")
+    unless Path.wildcard("#{sdk_file}") do
+      Mix.shell().info("#{sdk_file} does not exist, rebuilding...")
+      bitbake(pkg, "#{sdk_build_cmd}")
     end
 
     :ok
@@ -198,10 +195,15 @@ defmodule Nerves.System.Yocto do
     "#{pkg.path}/#{deploy_dir}/sdk/#{sdk_image}"
   end
 
-  defp make_archive(:linux, pkg, toolchain, opts) do
-    package_dir = package_dir(pkg)
+  defp squashfs_file(pkg) do
     deploy_dir = pkg.config[:platform_config][:deploy_dir]
-    sdk_image = pkg.config[:platform_config][:sdk_image] || pkg.config[:platform_config][:image]
+    image = pkg.config[:platform_config][:image]
+    machine = pkg.config[:platform_config][:machine]
+    "#{pkg.path}/#{deploy_dir}/images/#{machine}/#{image}-#{machine}.squashfs"
+  end
+
+  defp make_archive(:linux, pkg, _toolchain, _opts) do
+    package_dir = package_dir(pkg)
 
     # Work-around the need of changing VERSION in order to have the nerves_system_yocto built
     # In the worst case we shall invoke make function twice and that has negligible overhead.
