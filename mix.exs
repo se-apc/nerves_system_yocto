@@ -32,7 +32,7 @@ defmodule NervesSystemYocto.Mixfile do
 
   defp deps do
     [
-      {:nerves, github: "se-apc/nerves", runtime: false, override: true}
+      {:nerves, "~> 1.11", override: true, runtime: false},
     ]
   end
 
