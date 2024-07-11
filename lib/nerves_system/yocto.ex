@@ -34,7 +34,7 @@ defmodule Nerves.System.Yocto do
   Build the artifact
   """
   def build(pkg, toolchain, opts) do
-    Mix.shell().info("Build...")
+    Mix.shell().info("Build... #{inspect(pkg)}")
 
     {_, type} = :os.type()
     make(type, pkg, toolchain, opts)
@@ -145,8 +145,8 @@ defmodule Nerves.System.Yocto do
     error_host_os(type)
   end
 
-  # KAS_BUILD_DIR=build-nmc4/ kas build kas/meta-nmc4/nmc4-dev.yml -c populate_sdk --target agilis-core-image-dev
-  def bitbake(pkg, command) do
+  # ultimately invokes bitbake
+  def kas_build(pkg, command) do
     build_dir = pkg.config[:platform_config][:build_dir]
     yml_file = pkg.config[:platform_config][:yml_file]
 
@@ -161,7 +161,7 @@ defmodule Nerves.System.Yocto do
 
     unless File.exists?(squashfs_file) do
       Mix.shell().info("#{squashfs_file} does not exist, rebuilding...")
-      bitbake(pkg, "#{image_build_cmd}")
+      kas_build(pkg, "#{image_build_cmd}")
     end
 
     :ok
@@ -173,7 +173,7 @@ defmodule Nerves.System.Yocto do
 
     unless Path.wildcard("#{sdk_file}") do
       Mix.shell().info("#{sdk_file} does not exist, rebuilding...")
-      bitbake(pkg, "#{sdk_build_cmd}")
+      kas_build(pkg, "#{sdk_build_cmd}")
     end
 
     :ok
@@ -214,17 +214,18 @@ defmodule Nerves.System.Yocto do
     make(:linux, pkg, toolchain, opts)
 
     # Delete toolchain
-    File.rm_rf!("#{pkg.path}/#{package_dir}/toolchain")
+    #File.rm_rf!("#{package_dir}/toolchain")
     bash("[ -d #{package_dir}/images ] && rm -rfv #{package_dir}/images", cd: pkg.path)
 
     # Create directory
-    File.mkdir_p!("#{pkg.path}/#{package_dir}")
+    File.mkdir_p!("#{package_dir}")
 
     # Copy SDK
-    Mix.shell().info("Copying SDK to #{package_dir}/poky.sh")
+    Mix.shell().info("Copying SDK (#{sdk_file(pkg)}) to #{package_dir}/poky.sh...")
 
-    File.cp!(sdk_file(pkg), "#{pkg.path}/#{package_dir}/poky.sh")
+    File.cp!(sdk_file(pkg), "#{package_dir}/poky.sh")
 
+    Mix.shell().info("Copying Image to #{package_dir}/images...")
     bash("cp -Rf #{deploy_dir}/images/#{machine} #{package_dir}/images", cd: pkg.path)
 
     name = Artifact.download_name(pkg)
@@ -236,7 +237,7 @@ defmodule Nerves.System.Yocto do
 
     exclusion_list = pkg.config[:platform_config][:exclude]
     exclude_params = exclude_tar_params(exclusion_list)
-
+    Mix.shell().info("Creating #{package_path}...")
     bash(
       "tar c -z -f #{package_path} -C #{Mix.Project.build_path()} #{exclude_params} #{Artifact.name(pkg)}",
       cd: pkg.path
@@ -248,6 +249,7 @@ defmodule Nerves.System.Yocto do
     File.rm_rf!(package_dir)
 
     if File.exists?(package_path) do
+      Mix.shell().info("#{package_path} created.")
       {:ok, package_path}
     else
       {:error, "Package #{package_path} not found"}
