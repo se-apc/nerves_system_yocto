@@ -5,6 +5,9 @@ defmodule Nerves.System.Yocto do
 
   import Mix.Nerves.Utils
 
+  @output_toolchain_name "environment-setup-armv7vet2hf-vfpv4d16-senux-linux-gnueabi"
+  @output_nerves_setup_script_name "environment-setup-nerves.sh"
+
   @doc """
   Called as the last step of bootstrapping the Nerves env.
   """
@@ -211,7 +214,21 @@ defmodule Nerves.System.Yocto do
 
     # Work-around the need of changing VERSION in order to have the nerves_system_yocto built
     # In the worst case we shall invoke make function twice and that has negligible overhead.
-    make(:linux, pkg, toolchain, opts)
+    # checksum files are ones we will use as the source files for this check, as they are the main ones the build depends on
+    source_files = pkg.config[:checksum]
+    target_files = [
+      "#{package_dir}/toolchain/#{@output_toolchain_name}",
+      "#{package_dir}/toolchain/#{@output_nerves_setup_script_name}",
+    ]
+
+    if Mix.Utils.stale?(source_files, target_files) do
+      Mix.shell().info("SDK stale. Rebuilding...")
+      Mix.shell().info("source_files: #{inspect(source_files)}")
+      Mix.shell().info("target_files: #{inspect(target_files)}")
+      make(:linux, pkg, toolchain, opts)
+    else
+      Mix.shell().info("SDK already up to date, no need to rebuild or re-extract.")
+    end
 
     # Delete toolchain
     #File.rm_rf!("#{package_dir}/toolchain")
