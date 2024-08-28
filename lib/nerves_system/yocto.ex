@@ -230,8 +230,6 @@ defmodule Nerves.System.Yocto do
       Mix.shell().info("SDK already up to date, no need to rebuild or re-extract.")
     end
 
-    # Delete toolchain
-    #File.rm_rf!("#{package_dir}/toolchain")
     bash("[ -d #{package_dir}/images ] && rm -rfv #{package_dir}/images", cd: pkg.path)
 
     # Create directory
@@ -247,18 +245,14 @@ defmodule Nerves.System.Yocto do
 
     name = Artifact.download_name(pkg)
 
-    # {:ok, pid} = Nerves.Utils.Stream.start_link(file: "archive.log")
-    # stream = IO.stream(pid, :line)
-
     package_path = Path.join(Mix.Project.build_path(), name <> Artifact.ext(pkg))
 
     exclusion_list = pkg.config[:platform_config][:exclude]
     exclude_params = exclude_tar_params(exclusion_list)
+    tar_cmd = "tar c -z -f #{package_path} -C #{Mix.Project.build_path()} #{exclude_params} #{Artifact.name(pkg)}"
     Mix.shell().info("Creating #{package_path}...")
-    bash(
-      "tar c -z -f #{package_path} -C #{Mix.Project.build_path()} #{exclude_params} #{Artifact.name(pkg)}",
-      cd: pkg.path
-    )
+    Mix.shell().info("Tar command from (#{pkg.path}) #{tar_cmd}...")
+    bash(tar_cmd, cd: pkg.path)
 
     # The package_dir has been heavily modified.  Remove it so
     # it can be rebuilt correctly
