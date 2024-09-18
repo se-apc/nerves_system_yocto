@@ -86,7 +86,7 @@ defmodule Nerves.System.Yocto do
 
     Mix.shell().info("Make...")
     Mix.shell().info("    package_dir = #{package_dir}")
-    Mix.shell().info("    deploy_dir   = #{deploy_dir}")
+    Mix.shell().info("    deploy_dir  = #{deploy_dir}")
 
     if setup do
       bash(setup, cd: pkg.path)
