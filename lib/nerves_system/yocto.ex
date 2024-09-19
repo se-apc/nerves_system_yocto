@@ -5,12 +5,8 @@ defmodule Nerves.System.Yocto do
 
   import Mix.Nerves.Utils
 
-  defp poky_script(pkg) do
-    sdk_image = pkg.config[:platform_config][:sdk_image] || pkg.config[:platform_config][:image]
-    build_dir = pkg.config[:platform_config][:build_dir]
-
-    "./#{build_dir}/tmp/deploy/sdk/poky-*-#{sdk_image}-*.sh"
-  end
+  @output_toolchain_name "environment-setup-armv7vet2hf-vfpv4d16-senux-linux-gnueabi"
+  @output_nerves_setup_script_name "environment-setup-nerves.sh"
 
   @doc """
   Called as the last step of bootstrapping the Nerves env.
@@ -31,7 +27,9 @@ defmodule Nerves.System.Yocto do
 
       File.rm(sdk_sh)
     else
-       IO.puts("sdk_sh = #{inspect sdk_sh} does not exist! We shall attempt at the later stage...")
+      IO.puts(
+        "sdk_sh = #{inspect(sdk_sh)} does not exist! We shall attempt at the later stage..."
+      )
     end
   end
 
@@ -39,7 +37,7 @@ defmodule Nerves.System.Yocto do
   Build the artifact
   """
   def build(pkg, toolchain, opts) do
-    Mix.shell().info("Build...")
+    Mix.shell().info("Build... #{inspect(pkg)}")
 
     {_, type} = :os.type()
     make(type, pkg, toolchain, opts)
@@ -78,29 +76,9 @@ defmodule Nerves.System.Yocto do
     make_archive(type, pkg, toolchain, opts)
   end
 
-  defp prepare(pkg) do
-    Mix.shell().info("Preparing SDK image...")
-
-    system_path = System.get_env("NERVES_SYSTEM") || raise("You must set NERVES_SYSTEM to the system dir prior to requiring this file")
-
-    sdk_sh = Path.join(system_path, "poky.sh")
-
-    unless File.exists?(sdk_sh) do
-      [poky_install_script | _tail] =
-	poky_script(pkg)
-	|> Path.wildcard()
-
-      File.cp!(poky_install_script, sdk_sh)
-
-      ensure_unpacked(system_path)
-    end
-
-    :ok
-  end
-
-  defp make(:linux, pkg, _toolchain, opts) do
+  defp make(:linux, pkg, _toolchain, _opts) do
     setup = pkg.config[:platform_config][:setup]
-    build_dir = pkg.config[:platform_config][:build_dir]
+    deploy_dir = pkg.config[:platform_config][:deploy_dir]
     image = pkg.config[:platform_config][:image]
     machine = pkg.config[:platform_config][:machine]
     sdk_image = pkg.config[:platform_config][:sdk_image] || pkg.config[:platform_config][:image]
@@ -108,9 +86,8 @@ defmodule Nerves.System.Yocto do
 
     Mix.shell().info("Make...")
     Mix.shell().info("    package_dir = #{package_dir}")
-    Mix.shell().info("    build_dir   = #{build_dir}")
+    Mix.shell().info("    deploy_dir  = #{deploy_dir}")
 
-   #  File.cp
     if setup do
       bash(setup, cd: pkg.path)
     end
@@ -127,7 +104,7 @@ defmodule Nerves.System.Yocto do
          :ok <- ensure_sdk(pkg),
          {_, 0} <-
            bash(
-             "./#{build_dir}/tmp/deploy/sdk/poky-*-#{sdk_image}-*.sh -y -d #{package_dir}/toolchain",
+             "./#{deploy_dir}/sdk/#{sdk_image} -y -d #{package_dir}/toolchain",
              cd: pkg.path
            ) do
       bash("mv #{package_dir}/toolchain/staging #{package_dir}/staging", cd: pkg.path)
@@ -136,7 +113,7 @@ defmodule Nerves.System.Yocto do
       File.mkdir_p("#{package_dir}/scripts/")
 
       bash(
-        "ln -fs `pwd`/#{build_dir}/tmp/deploy/images/#{machine} #{package_dir}/images",
+        "ln -fs `pwd`/#{deploy_dir}/images/#{machine} #{package_dir}/images",
         cd: pkg.path
       )
 
@@ -171,33 +148,35 @@ defmodule Nerves.System.Yocto do
     error_host_os(type)
   end
 
-  def bitbake(pkg, command) do
+  # ultimately invokes bitbake
+  def kas_build(pkg, command) do
     build_dir = pkg.config[:platform_config][:build_dir]
-    poky_dir = pkg.config[:platform_config][:poky_dir]
+    yml_file = pkg.config[:platform_config][:yml_file]
 
-    oe_init_build = "#{poky_dir}/oe-init-build-env"
-    Mix.shell().info("bitbake #{command}")
-    bash("source #{oe_init_build} #{build_dir} && bitbake #{command}", cd: pkg.path)
+    full_cmd = "kas build #{yml_file} #{command}"
+    Mix.shell().info("KAS_BUILD_DIR=#{build_dir} #{full_cmd}")
+    bash(full_cmd, cd: pkg.path, env: [{"KAS_BUILD_DIR", build_dir}])
   end
 
   def ensure_image(pkg) do
-    build_dir = pkg.config[:platform_config][:build_dir]
-    image = pkg.config[:platform_config][:image]
-    machine = pkg.config[:platform_config][:machine]
+    squashfs_file = squashfs_file(pkg)
+    image_build_cmd = pkg.config[:platform_config][:image_build_cmd]
 
-    unless File.exists?("#{build_dir}/tmp/deploy/images/#{machine}/#{image}-#{machine}.squashfs") do
-      bitbake(pkg, "#{image}")
+    unless File.exists?(squashfs_file) do
+      Mix.shell().info("#{squashfs_file} does not exist, rebuilding...")
+      kas_build(pkg, "#{image_build_cmd}")
     end
 
     :ok
   end
 
   def ensure_sdk(pkg) do
-    build_dir = pkg.config[:platform_config][:build_dir]
-    sdk_image = pkg.config[:platform_config][:sdk_image] || pkg.config[:platform_config][:image]
+    sdk_file = sdk_file(pkg)
+    sdk_build_cmd = pkg.config[:platform_config][:sdk_image]
 
-    unless Path.wildcard("#{build_dir}/tmp/deploy/sdk/poky-*-#{sdk_image}-*.sh") do
-      bitbake(pkg, "-c populate_sdk #{sdk_image}")
+    unless Path.wildcard("#{sdk_file}") do
+      Mix.shell().info("#{sdk_file} does not exist, rebuilding...")
+      kas_build(pkg, "#{sdk_build_cmd}")
     end
 
     :ok
@@ -207,65 +186,81 @@ defmodule Nerves.System.Yocto do
   defp exclude_tar_params(nil) do
     ""
   end
+
   defp exclude_tar_params(list) do
     for elem <- list do
-	"--exclude=\'#{elem}\'"
+      "--exclude=\'#{elem}\'"
     end
     |> Enum.join(" ")
   end
 
+  defp sdk_file(pkg) do
+    deploy_dir = pkg.config[:platform_config][:deploy_dir]
+    sdk_image = pkg.config[:platform_config][:sdk_image] || pkg.config[:platform_config][:image]
+    "#{pkg.path}/#{deploy_dir}/sdk/#{sdk_image}"
+  end
+
+  defp squashfs_file(pkg) do
+    deploy_dir = pkg.config[:platform_config][:deploy_dir]
+    image = pkg.config[:platform_config][:image]
+    machine = pkg.config[:platform_config][:machine]
+    "#{pkg.path}/#{deploy_dir}/images/#{machine}/#{image}-#{machine}.squashfs"
+  end
+
   defp make_archive(:linux, pkg, toolchain, opts) do
     package_dir = package_dir(pkg)
+    deploy_dir = pkg.config[:platform_config][:deploy_dir]
     machine = pkg.config[:platform_config][:machine]
-    build_dir = pkg.config[:platform_config][:build_dir]
-    sdk_image = pkg.config[:platform_config][:sdk_image] || pkg.config[:platform_config][:image]
 
     # Work-around the need of changing VERSION in order to have the nerves_system_yocto built
     # In the worst case we shall invoke make function twice and that has negligible overhead.
-    make(:linux, pkg, toolchain, opts)
+    # checksum files are ones we will use as the source files for this check, as they are the main ones the build depends on
+    source_files = pkg.config[:checksum]
+    target_files = [
+      "#{package_dir}/toolchain/#{@output_toolchain_name}",
+      "#{package_dir}/toolchain/#{@output_nerves_setup_script_name}",
+    ]
 
-    # Delete toolchain
-    bash("rm -Rf #{package_dir}/toolchain", cd: pkg.path)
+    if Mix.Utils.stale?(source_files, target_files) do
+      Mix.shell().info("SDK stale. Rebuilding...")
+      Mix.shell().info("source_files: #{inspect(source_files)}")
+      Mix.shell().info("target_files: #{inspect(target_files)}")
+      make(:linux, pkg, toolchain, opts)
+    else
+      Mix.shell().info("SDK already up to date, no need to rebuild or re-extract.")
+    end
+
     bash("[ -d #{package_dir}/images ] && rm -rfv #{package_dir}/images", cd: pkg.path)
 
     # Create directory
-    bash(
-      "mkdir -p #{package_dir}",
-      cd: pkg.path
-    )
+    File.mkdir_p!("#{package_dir}")
 
     # Copy SDK
-    Mix.shell().info("Copying SDK to #{package_dir}/poky.sh")
+    Mix.shell().info("Copying SDK (#{sdk_file(pkg)}) to #{package_dir}/poky.sh...")
 
-    bash(
-      "cp -fv ./#{build_dir}/tmp/deploy/sdk/poky-*-#{sdk_image}-*.sh #{package_dir}/poky.sh",
-      cd: pkg.path
-    )
+    File.cp!(sdk_file(pkg), "#{package_dir}/poky.sh")
 
-    bash("cp -Rf #{build_dir}/tmp/deploy/images/#{machine} #{package_dir}/images", cd: pkg.path)
+    Mix.shell().info("Copying Image to #{package_dir}/images...")
+    bash("cp -Rf #{deploy_dir}/images/#{machine} #{package_dir}/images", cd: pkg.path)
 
     name = Artifact.download_name(pkg)
 
-    # {:ok, pid} = Nerves.Utils.Stream.start_link(file: "archive.log")
-    # stream = IO.stream(pid, :line)
-
     package_path = Path.join(Mix.Project.build_path(), name <> Artifact.ext(pkg))
 
-    an =  Artifact.name(pkg)
     exclusion_list = pkg.config[:platform_config][:exclude]
     exclude_params = exclude_tar_params(exclusion_list)
-
-    bash(
-      "tar c -z -f #{package_path} -C #{Mix.Project.build_path()} #{exclude_params} #{Artifact.name(pkg)}",
-      cd: pkg.path
-    )
+    tar_cmd = "tar c -z -f #{package_path} -C #{Mix.Project.build_path()} #{exclude_params} #{Artifact.name(pkg)}"
+    Mix.shell().info("Creating #{package_path}...")
+    Mix.shell().info("Tar command from (#{pkg.path}) #{tar_cmd}...")
+    bash(tar_cmd, cd: pkg.path)
 
     # The package_dir has been heavily modified.  Remove it so
     # it can be rebuilt correctly
     package_dir = package_dir(pkg)
-    File.rm_rf(package_dir)
+    File.rm_rf!(package_dir)
 
     if File.exists?(package_path) do
+      Mix.shell().info("#{package_path} created.")
       {:ok, package_path}
     else
       {:error, "Package #{package_path} not found"}

@@ -125,7 +125,7 @@ $NERVES_SYSTEM/scripts/scrub-otp-release.sh "$TMP_DIR/rootfs-additions/srv/erlan
 if [[ "$ROOTFS_ADDITIONS" ]]; then
     for ADDITION in $ROOTFS_ADDITIONS; do
       if [[ -d $ADDITION ]]; then
-          echo "Copying rootfs_overlay: $ADDITION"
+          echo "Copying rootfs_overlay: $ADDITION to $TMP_DIR/rootfs-additions"
           cp -Rf "$ADDITION/." "$TMP_DIR/rootfs-additions"
       elif [[ -n "$ADDITION" ]]; then
           echo "rootfs_overlay: $ADDITION does not exist!"
