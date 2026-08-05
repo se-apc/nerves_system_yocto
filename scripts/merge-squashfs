@@ -8,6 +8,9 @@
 set -e
 LC_ALL=C
 
+# Host tools (awk/unsquashfs/mksquashfs) must use host libc, not SDK-provided libs.
+unset LD_LIBRARY_PATH LD_PRELOAD LIBRARY_PATH
+
 # Account for Mac differences
 if [[ "$(uname)" = "Darwin" ]]; then
     # Use gstat on the Mac, but make sure that it exists first.
@@ -162,13 +165,23 @@ fi
 workdir=`mktemp -d 2>/dev/null || mktemp -d -t 'merge-squashfs-tmp'`
 pushd $workdir >/dev/null
 
+unsquashfs "$input_squashfs" >/dev/null 2>/dev/null
+
+# Some newer base images ship /sbin as a symlink while overlays may provide
+# a real /sbin directory. Copying dir-over-symlink fails, so move overlay
+# binaries into /usr/sbin in that case.
+if [[ -d "$overlay_dir/sbin" && ! -d "$workdir/squashfs-root/sbin" ]]; then
+    mkdir -p "$overlay_dir/usr/sbin"
+    cp -Rf "$overlay_dir/sbin/." "$overlay_dir/usr/sbin"
+    rm -rf "$overlay_dir/sbin"
+fi
+
 unsquash_to_pseudofile "$input_squashfs" >pseudofile.in
 find_to_pseudofile "$overlay_dir" >>pseudofile.in
 
 # remove repeated entries to avoid warnings from mksquashfs
 awk '!x[$1]++' pseudofile.in > pseudofile
 
-unsquashfs "$input_squashfs" >/dev/null 2>/dev/null
 cp -Rf "$overlay_dir/." "$workdir/squashfs-root"
 
 # Do any App Specific Finalization
@@ -176,6 +189,9 @@ if [[ ! -z "$NERVES_ROOTFS_FINALIZE_SH" ]]; then
     $NERVES_ROOTFS_FINALIZE_SH "$workdir/squashfs-root"
 fi
 
+# Some newer base images ship /sbin as a symlink while overlays may provide
+# a real /sbin directory. Copying dir-over-symlink fails, so move overlay
+# binaries into /usr/sbin in that case.
 mksquashfs squashfs-root "$output_squashfs" -pf pseudofile -noappend -no-recovery -no-progress
 
 # cleanup
