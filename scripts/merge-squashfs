@@ -189,9 +189,6 @@ if [[ ! -z "$NERVES_ROOTFS_FINALIZE_SH" ]]; then
     $NERVES_ROOTFS_FINALIZE_SH "$workdir/squashfs-root"
 fi
 
-# Some newer base images ship /sbin as a symlink while overlays may provide
-# a real /sbin directory. Copying dir-over-symlink fails, so move overlay
-# binaries into /usr/sbin in that case.
 mksquashfs squashfs-root "$output_squashfs" -pf pseudofile -noappend -no-recovery -no-progress
 
 # cleanup
